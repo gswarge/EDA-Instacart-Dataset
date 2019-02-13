@@ -1,0 +1,462 @@
+---
+title: "EDA on Instacart Database"
+author: "Gaurang Swarge"
+date: "5/15/2018"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/', echo=FALSE, warning=FALSE, message=FALSE)
+
+options(width = 100)
+
+
+#EDA on the data
+
+library(plyr)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(DT)
+library(scales)
+library(knitr)
+
+#Reading all the Datasets
+orders <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/orders.csv")
+products <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/products.csv")
+departments <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/departments.csv")
+aisles <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/aisles.csv")
+opp <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/order_products__prior.csv")
+opt <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/order_products__train.csv")
+
+
+#converting to factor variables
+orders$order_hour_of_day <- as.numeric(orders$order_hour_of_day)
+orders$order_dow <- as.factor(orders$order_dow)
+orders$eval_set <- as.factor(orders$eval_set)
+
+products$product_name <- as.factor(products$product_name)
+
+departments$department <- as.factor(departments$department)
+
+aisles$aisle <-  as.factor(aisles$aisle)
+
+
+#Merging the tables:
+
+products_aisles <- merge(products,aisles,by="aisle_id")
+products_aisles_dept <- merge(products_aisles,departments,by="department_id")
+
+
+```
+
+### Top 50 most Ordered Products
+```{r top50ordered}
+
+temp <- orders  %>%
+  inner_join(opp,by="order_id") %>%
+  inner_join(products,by="product_id")
+ 
+  summary(temp)  
+  kable(head(temp,15))
+  highest_ordered_product <- sort(table(temp$product_name),decreasing = TRUE)
+  highest_ordered_product <- highest_ordered_product[1:50]
+  kable(head(highest_ordered_product),15)
+  #plot(highest_ordered_product)
+  hop <-as.data.frame(highest_ordered_product)
+
+hop %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none" )+
+    scale_y_continuous(breaks=seq(50000, 480000, 25000))+
+    labs(title="Highest Ordered Products - Top 50", y= "No of Orders")
+  
+```
+
+### Top 50 most Re-Ordered Products
+```{r }
+temp <- orders  %>%
+  inner_join(opp,by="order_id") %>%
+  inner_join(products,by="product_id") %>%
+  filter(reordered==1)
+
+summary(temp)  
+kable(head(temp,15))
+highest_reordered_product <- sort(table(temp$product_name),decreasing = TRUE)
+highest_reordered_product <- highest_reordered_product[1:50]
+kable(head(highest_reordered_product),15)
+#plot(highest_ordered_product)
+hrop <-as.data.frame(highest_reordered_product)
+
+hrop %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+  geom_bar(stat="identity")+
+  theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none")+
+  #coord_cartesian(ylim=c(1000,20000,1000))+
+  scale_y_continuous(breaks=seq(50000, 480000, 25000))+
+  labs(title="Highest re-Ordered Product - Top 50", y="No of Orders")
+```
+
+
+### Finiding unique products which are not reordered
+Organic Italian Parsley Bunch & Blueberries are 2 products which are part of highest ordered products but are not part of the top 50 re-ordered products
+
+``` {r prodnotrepordered}
+uniq_prod <- hop %>%
+  anti_join(hrop, by="Var1")
+  #data.frame(unique_prod=union(hop$Var1, hrop$Var1))
+uniq_prod
+```
+ 
+### Least ordered products
+ 
+ 
+``` {r leastordered}
+
+
+bottom25_products <- orders  %>%
+  inner_join(opp,by="order_id") %>%
+  count(product_id) %>%
+  arrange(desc(n)) %>%
+  tail(25) %>%
+  merge(products,by='product_id')
+kable(head(bottom25_products,25))
+  
+bottom25_products %>% ggplot(aes(x=product_name,y=n, fill=product_name)) +
+  geom_bar(stat="identity")+
+  theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none")+
+  #coord_cartesian(ylim=c(1000,20000,1000))+
+  scale_y_continuous(breaks=seq(0, 5, 1))+
+  labs(title="Least Ordered Products - Last 25", y="No of Orders")
+```
+ 
+### Order hour of the day vs number of orders of customers
+
+To find out what time of the day most orders are placed
+
+```{r orderhourofday}
+  p<-orders %>% 
+    group_by(order_hour_of_day,order_number)%>%
+    summarise(count = n()) %>%
+    arrange(desc(count))
+  
+  kable(head(p,10))
+  #dim(p)
+  
+  p %>% ggplot(aes(x=order_hour_of_day,y=order_number,fill=order_number))+
+    geom_tile(aes(fill=count),colour = "white") + 
+    scale_fill_gradient(low = "aquamarine",high = "red")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),panel.grid.major = element_line(colour = "lightgrey"))+
+    scale_x_continuous(breaks=seq(0, 24, 1))+
+    scale_y_continuous(breaks=seq(0, 100, 5))+
+    labs(title="Order Hour of Day", x="Order Hour of Day", y="Count of order numbers")
+
+```
+### 2. Order Day of the week vs the Order Hour of the day
+
+```{r orderdayofweek}
+temp4 <- orders %>%
+    mutate(order_dow = as.factor(order_dow)) %>%
+    mutate(order_hour_of_day = as.factor(order_hour_of_day)) %>%
+    group_by(order_dow,order_hour_of_day) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count))
+    
+  kable(head(temp4),10)
+  
+  temp4 %>% ggplot(aes(x=order_dow,y=order_hour_of_day))+
+    geom_tile(aes(fill=count),colour = "white") + 
+    scale_fill_gradient(low = "aquamarine",high = "red")+
+    #scale_fill_distiller(palette = "Spectral")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),panel.grid.major = element_line(colour = "grey"))+
+    labs(title="Which Day and what time do people order the most?",x="Day of the Week", y="Order Hour of the day")
+  
+```
+
+
+### 3. After How many days do customers place a Re-Order?
+7th Day and the 30th day is when people reorder the most<br/>
+
+```{r reorderdays}
+ p<-orders 
+
+ p %>% ggplot(aes(x=days_since_prior_order,fill=order_dow))+
+    geom_histogram(stat = "count")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),panel.grid.major = element_line(colour = "grey"))+
+    scale_x_continuous(breaks=seq(0, 30, 1))+
+    labs(x="No. of Days since last Order",y="Count of Orders")
+```
+ 
+### 4. Finding out total %ge of products which are reordered
+As you can se about 60% products are generally reordered & 40% of Products are not ordered again<br/> 
+
+```{r percentreordered}
+temp2 <- opp %>%
+    group_by(reordered) %>%
+    summarise(count = n()) %>%
+    mutate(reordered = as.factor(reordered)) %>%
+    mutate(percentage = count/sum(count))
+  
+  kable(head(temp2,10))
+  
+  temp2 %>% ggplot(aes(x=desc(reordered),y=percentage, fill=reordered))+
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),panel.grid.major = element_line(colour = "grey"))+
+    scale_x_continuous(breaks=seq(0, 1, 1))+
+    scale_y_continuous(breaks=seq(0, 1.0, .15))+
+    labs(title="%ge of products Reordered", x="Reordered or Not")
+```
+
+### Maximum Product varieties in each Department
+'Personal Care' and 'Snacks' has the maximum product varieties<br/>
+
+```{r prodvaritiesdept}
+temp3 <- products %>%
+    group_by(department_id) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count)) %>% 
+    left_join(departments,by="department_id")%>%
+    top_n(20)
+  
+  kable(head(temp3),10)
+  
+  temp3 %>% ggplot(aes(x=reorder(department,-count),y=count, fill=department))+
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"))+
+    labs(title="Max number of product variety in which Department? (Top 20)",y="Count of Products")
+  
+
+```
+
+### 5. Products from which Departments are ordered the most ?
+```{r highestordereddepts}
+  temp6 <- opp %>% 
+   # arrange(desc(-order_id)) %>% 
+    left_join(products,by="product_id")%>%
+    left_join(departments,by="department_id")%>%
+    select(order_id,department)
+    #distinct(order_id,department)
+  
+  kable(head(temp6,10))
+  dim(temp6)
+
+  hod <-  sort(table(temp6$department),decreasing = TRUE)
+  dim(hod)
+  hod <- hod[1:21]
+  kable(hod)
+  hod <-as.data.frame(hod)
+  
+  hod %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none" )+
+    scale_y_continuous(breaks=seq(30000, 9500000, 500000))+
+    labs(title="Highest Ordered Department", y= "No of Orders")
+
+```
+
+### 6. Products from which from which  Departments are reordered the most?
+```{r highestreordereddepts}
+  temp6 <- opp %>% 
+    left_join(products,by="product_id")%>%
+    left_join(departments,by="department_id")%>%
+    filter(reordered == 1) %>%
+    select(order_id,department)
+  
+  kable(head(temp6,10))
+  dim(temp6)
+  
+  hrod <-  sort(table(temp6$department),decreasing = TRUE)
+  dim(hrod)
+  hrod <- hrod[1:21]
+  kable(hrod)
+  hrod <-as.data.frame(hrod)
+  
+  hrod %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none" )+
+    scale_y_continuous(breaks=seq(30000, 9500000, 500000))+
+    labs(title="Highest Re-Ordered Department", y= "No of Orders")
+```
+
+#### 7. Change in the Department rank during the reorder
+Beverages  jump to 3rd position compared to 4th during the first order <br/>
+Bakery jumps to 6th position during reordered compared to 7th in the first order <br/>
+Deli jumps to 8th position during  reorder compared to 9th in the first order<br/>
+Similarly 'Breakfast' & 'meat seafood' also jumps up one position during the reorder compared to first time order
+```{r changedeptrank}
+  uniq_dept <- hod %>%
+    left_join(hrod, by="Var1")%>%
+    arrange(desc(Freq.x))
+  uniq_dept
+```
+
+### Maximum Product varieties in each Aisles
+'Personal Care' and 'Snacks' has the maximum product varieties<br/>
+
+```{r prodvaritiesaisle}
+temp3 <- products %>%
+    group_by(aisle_id) %>%
+    summarise(count = n()) %>%
+    arrange(desc(count)) %>% 
+    left_join(aisles,by="aisle_id")%>%
+    mutate(aisle = if_else(as.character(aisle) %in% c('missing','other'), 'G-Others',as.character(aisle))) %>% 
+    top_n(50)
+  
+  kable(head(temp3),10)
+  
+  temp3 %>% ggplot(aes(x=reorder(aisle,-count),y=count, fill=aisle))+
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none")+
+    labs(title="Max number of product variety in which Aisles? (Top 50)",y="Count of Products")
+  
+
+```
+
+### Top 50  highest ordered Aisles?
+```{r highestorderedaisles}
+
+temp6 <- opp %>% 
+    left_join(products,by="product_id")%>%
+    left_join(aisles,by="aisle_id")%>%
+    select(order_id,aisle)
+  
+  kable(head(temp6,10))
+  dim(temp6)
+  
+  hoa <-  sort(table(temp6$aisle),decreasing = TRUE)
+  dim(hoa)
+  hoa <- hoa[1:50]
+  kable(head(hoa,10))
+  hoa <-as.data.frame(hoa)
+  
+  hoa %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none" )+
+    scale_y_continuous(breaks=seq(300000, 3700000, 500000))+
+    labs(title="Highest Ordered Aisles - Top 50", y= "No of Orders")
+```
+
+### Top 50 highest reordered Aisles?
+```{r highestreorderedaisles}
+temp6 <- opp %>% 
+    left_join(products,by="product_id")%>%
+    left_join(aisles,by="aisle_id")%>%
+    filter(reordered == 1)
+    #select(order_id,aisle)
+  
+  kable(head(temp6,10))
+  dim(temp6)
+  
+  hroa <-  sort(table(temp6$aisle),decreasing = TRUE)
+  dim(hroa)
+  hroa <- hroa[1:50]
+  kable(hroa)
+  hroa <-as.data.frame(hroa)
+  
+  hroa %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none" )+
+    scale_y_continuous(breaks=seq(100000, 2700000, 500000))+
+    labs(title="Highest RE-Ordered Aisles - Top 50", y= "No of Orders")
+```
+
+### Unique Aisles which are not reordered again
+'oils vinegars', condiments, 'spices seasonings' are three aisles which are not reordered within 30 days
+
+```{r uniqueaisles}
+uniq_aisles <- hoa %>%
+    anti_join(hroa, by="Var1")
+  uniq_aisles
+  
+```
+
+### Looking into Customers - Highest Ordered products in the First Order 
+```{r highestorderedfirstorder}
+temp <- orders  %>%
+  inner_join(opp,by="order_id") %>%
+  inner_join(products,by="product_id")%>%
+  filter(order_number<2)%>%
+  select(user_id,order_number,product_id,product_name)
+  #filter(add_to_cart_order == 1)
+  
+  summary(temp)  
+  kable(head(temp,15))
+  hopfo <- sort(table(temp$product_name),decreasing = TRUE)
+  hopfo <- hopfo[1:50]
+  kable(head(hopfo,15))
+  dim(hopfo)
+  #plot(highest_ordered_product)
+  hopfo <-as.data.frame(hopfo)
+  
+  hopfo %>% ggplot(aes(x=Var1,y=Freq, fill=Var1)) +
+    geom_bar(stat="identity")+
+    theme(axis.text.x=element_text(angle=60, hjust=1),axis.title.x = element_blank(),panel.grid.major = element_line(colour = "grey"),legend.position="none")+
+    #coord_cartesian(ylim=c(1000,20000,1000))+
+    scale_y_continuous(breaks=seq(5000, 30000, 5000))+
+    labs(title="Highest Ordered Products in First Order - Top 50", y="No of Orders")
+```
+
+### Which products out of the highest ordered products, are not part of the first order of the customer
+These 4 products inspite of being part of highest ordered products, are not ordered during the first order by the customers
+1     Organic Whole String Cheese 59676
+2      Organic Granny Smith Apple 58779
+3 Organic Unsweetened Almond Milk 57895
+4                    Spring Water 56087
+```{r }
+First_prod <- hop %>%
+    anti_join(hopfo, by="Var1")
+  #data.frame(unique_prod=union(hop$Var1, hrop$Var1))
+First_prod
+```
+
+### Avg no of products in the first order of the customer
+Mean   :10.08  means, on an average customer purchases 10 products in the first order<br/>
+```{r avgprodfirstorder}
+
+temp <- orders  %>%
+  inner_join(opp,by="order_id") %>%
+  inner_join(products,by="product_id")%>%
+  filter(order_number<2)%>%
+  group_by(user_id,order_number)%>%
+  summarise(cnt = n())
+  #select(user_id,order_number,product_id,product_name)
+
+summary(temp)  
+kable(head(temp,15))
+```
+
+
+```{r }
+
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
+
+
+```{r }
+
+```
