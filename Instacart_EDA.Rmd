@@ -1,7 +1,7 @@
 ---
 title: "EDA on Instacart Database"
 author: "Gaurang Swarge"
-date: "5/15/2018"
+date: "2/15/2019"
 output: html_document
 ---
 
@@ -23,12 +23,12 @@ library(scales)
 library(knitr)
 
 #Reading all the Datasets
-orders <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/orders.csv")
-products <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/products.csv")
-departments <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/departments.csv")
-aisles <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/aisles.csv")
-opp <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/order_products__prior.csv")
-opt <- fread("~/MEGA/PGBABI/00 Capstone Project/Dataset/order_products__train.csv")
+orders <- fread("Dataset/orders.csv")
+products <- fread("Dataset/products.csv")
+departments <- fread("Dataset/departments.csv")
+aisles <- fread("Dataset/aisles.csv")
+opp <- fread("Dataset/order_products__prior.csv")
+opt <- fread("Dataset/order_products__train.csv")
 
 
 #converting to factor variables
